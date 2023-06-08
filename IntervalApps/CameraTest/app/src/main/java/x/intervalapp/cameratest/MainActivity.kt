@@ -1,46 +1,159 @@
 package x.intervalapp.cameratest
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.graphics.ImageFormat
+import android.hardware.camera2.CameraAccessException
+import android.hardware.camera2.CameraCaptureSession
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraDevice
+import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CameraMetadata
+import android.hardware.camera2.params.StreamConfigurationMap
+import android.media.ImageReader
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.util.Size
+import android.view.Surface
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import x.intervalapp.cameratest.ui.theme.CameraTestTheme
+import androidx.core.content.ContextCompat
+import kotlin.properties.Delegates
 
-class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent {
-            CameraTestTheme {
-                // A surface container using the 'background' color from the theme
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    Greeting("Android")
+
+private const val RUN_INTERVAL: Long = 5000 // 5 seconds
+private const val IDLE_INTERVAL: Long = 5000 // 5 seconds
+
+private lateinit var imageReader: ImageReader
+private var cameraId: String? = null
+private var cameraDevice: CameraDevice? = null
+private var mSession: CameraCaptureSession? = null
+private var cameraManager: CameraManager? = null
+private var cameraCharacteristics: CameraCharacteristics? = null
+private var biggestSize: Size? = null
+private var targets: MutableList<Surface>? = null
+private var runnable: Runnable by Delegates.notNull()
+
+// Handler for infinite loop
+private lateinit var handler: Handler
+
+// Callback to assign cameraDevice
+private val mStateCallback: CameraDevice.StateCallback = object : CameraDevice.StateCallback() {
+    override fun onOpened(camera: CameraDevice) {
+        cameraDevice = camera
+        cameraDevice?.createCaptureSession(targets!!, mccsStateCallback, null)
+    }
+
+    override fun onDisconnected(camera: CameraDevice) {
+        cameraDevice?.close()
+    }
+
+    override fun onError(camera: CameraDevice, error: Int) {
+        cameraDevice?.close()
+        cameraDevice = null
+    }
+}
+
+private val mccsStateCallback: CameraCaptureSession.StateCallback =
+    object : CameraCaptureSession.StateCallback() {
+        override fun onConfigured(session: CameraCaptureSession) {
+            try {
+                mSession = session
+                val request =
+                    cameraDevice!!.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+                request.addTarget(targets!![0])
+
+                handler = Handler(Looper.getMainLooper())
+
+                // Runnable which takes a picture
+                runnable = Runnable {
+                    // Take a picture
+                    val now = System.currentTimeMillis()
+
+                    while (System.currentTimeMillis() - now < RUN_INTERVAL) {
+//                        Log.i("MainActivity", "take picture + ${System.currentTimeMillis()}")
+                        mSession?.capture(
+                            request.build(),
+                            object : CameraCaptureSession.CaptureCallback() {},
+                            null
+                        )
+                    }
+                    handler.postDelayed(runnable, IDLE_INTERVAL)
                 }
+
+                // Start infinite loop
+                handler.post(runnable)
+            } catch (ex: Exception) {
+                ex.printStackTrace()
             }
         }
-    }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    CameraTestTheme {
-        Greeting("Android")
+        override fun onConfigureFailed(session: CameraCaptureSession) {}
     }
+
+class MainActivity : ComponentActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        initialiseCamera()
+    }
+
+    private fun initialiseCamera() {
+//        Log.i("MainActivity", "initialiseCamera")
+        cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        try {
+            cameraId = getFrontFacingCameraId(cameraManager)
+            if (PackageManager.PERMISSION_GRANTED == ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.CAMERA
+                )
+            ) {
+                cameraCharacteristics = cameraManager?.getCameraCharacteristics(cameraId!!)
+                val streamConfigurationMap: StreamConfigurationMap? =
+                    cameraCharacteristics?.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                val jpegSizes =
+                    streamConfigurationMap!!.getOutputSizes(ImageFormat.JPEG)
+                biggestSize = Size(0, 0)
+                for (size in jpegSizes) {
+                    if (size.height >= biggestSize!!.height && size.width >= biggestSize!!.width) {
+                        biggestSize = size
+                    }
+                }
+                imageReader =
+                    ImageReader.newInstance(biggestSize!!.width, biggestSize!!.height, ImageFormat.PRIVATE, 50)
+                val imReaderSurface = imageReader.surface
+                targets = arrayOf(imReaderSurface).toMutableList()
+                cameraManager?.openCamera(cameraId!!, mStateCallback, null)
+            } else {
+                Log.d("Camera permission", "Missing")
+            }
+        } catch (ex: java.lang.Exception) {
+            ex.printStackTrace()
+        }
+    }
+
+    private fun getFrontFacingCameraId(cameraManager: CameraManager?): String? {
+        try {
+            for (id in cameraManager!!.cameraIdList) {
+                val cameraCharacteristics =
+                    cameraManager.getCameraCharacteristics(id)
+                val cameraOrientation =
+                    cameraCharacteristics.get(CameraCharacteristics.LENS_FACING)
+                if (cameraOrientation != null && cameraOrientation == CameraMetadata.LENS_FACING_FRONT) {
+                    return id
+                }
+            }
+        } catch (ex: CameraAccessException) {
+            ex.printStackTrace()
+        }
+        return null
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        cameraDevice?.close()
+    }
+
 }

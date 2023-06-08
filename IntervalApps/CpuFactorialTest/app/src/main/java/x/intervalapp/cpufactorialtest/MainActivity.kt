@@ -1,46 +1,45 @@
 package x.intervalapp.cpufactorialtest
 
 import android.os.Bundle
+import android.os.SystemClock.sleep
+import android.util.Log
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import x.intervalapp.cpufactorialtest.ui.theme.CpuFactorialTestTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+
 
 class MainActivity : ComponentActivity() {
+    private var runner: Job? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            CpuFactorialTestTheme {
-                // A surface container using the 'background' color from the theme
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    Greeting("Android")
-                }
+
+        while (true) {
+            runner = CoroutineScope(Dispatchers.IO).launch {
+                doThings()
+                runner = null
+            }
+            sleep(RUN_INTERVAL)
+            runner?.cancel()
+//            Log.i("MainActivity", "cancel + ${System.currentTimeMillis()}")
+            sleep(IDLE_INTERVAL)
+        }
+    }
+
+    private fun doThings() {
+//        Log.i("MainActivity", "launch + ${System.currentTimeMillis()}")
+        while (true) {
+            var res = 1
+            for (i in 1..256) {
+                res *= i
             }
         }
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    CpuFactorialTestTheme {
-        Greeting("Android")
+    companion object {
+        private const val RUN_INTERVAL: Long = 5000 // 5 seconds
+        private const val IDLE_INTERVAL: Long = 5000 // 5 seconds
     }
 }
