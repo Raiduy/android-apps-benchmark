@@ -10,23 +10,16 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraMetadata
-import android.hardware.camera2.CaptureRequest
-import android.hardware.camera2.TotalCaptureResult
 import android.hardware.camera2.params.StreamConfigurationMap
 import android.media.ImageReader
 import android.os.Bundle
 import android.os.Handler
-import android.os.SystemClock.sleep
+import android.os.Looper
 import android.util.Log
 import android.util.Size
 import android.view.Surface
 import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlin.properties.Delegates
 
 
@@ -72,7 +65,7 @@ private val mccsStateCallback: CameraCaptureSession.StateCallback =
                     cameraDevice!!.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
                 request.addTarget(targets!![0])
 
-                handler = Handler()
+                handler = Handler(Looper.getMainLooper())
 
                 // Runnable which takes a picture
                 runnable = Runnable {
@@ -80,18 +73,10 @@ private val mccsStateCallback: CameraCaptureSession.StateCallback =
                     val now = System.currentTimeMillis()
 
                     while (System.currentTimeMillis() - now < RUN_INTERVAL) {
-                        Log.i("MainActivity", "take picture + ${System.currentTimeMillis()}")
+//                        Log.i("MainActivity", "take picture + ${System.currentTimeMillis()}")
                         mSession?.capture(
                             request.build(),
-                            object : CameraCaptureSession.CaptureCallback() {
-                                override fun onCaptureCompleted(
-                                    session: CameraCaptureSession,
-                                    request: CaptureRequest,
-                                    result: TotalCaptureResult
-                                ) {
-                                    super.onCaptureCompleted(session, request, result)
-                                }
-                            },
+                            object : CameraCaptureSession.CaptureCallback() {},
                             null
                         )
                     }
@@ -109,27 +94,14 @@ private val mccsStateCallback: CameraCaptureSession.StateCallback =
     }
 
 class MainActivity : ComponentActivity() {
-    private var runner: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-//        initialiseCamera()
-
-//        while (true) {
-//            runner = CoroutineScope(Dispatchers.IO).launch {
-//                doThings()
-//                runner = null
-//            }
-            initialiseCamera()
-//            sleep(10000)
-//            runner?.cancel()
-            Log.i("MainActivity", "cancel + ${System.currentTimeMillis()}")
-//            sleep(IDLE_INTERVAL)
-//        }
+        initialiseCamera()
     }
 
     private fun initialiseCamera() {
-        Log.i("MainActivity", "initialiseCamera")
+//        Log.i("MainActivity", "initialiseCamera")
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
         try {
             cameraId = getFrontFacingCameraId(cameraManager)
@@ -154,7 +126,6 @@ class MainActivity : ComponentActivity() {
                 val imReaderSurface = imageReader.surface
                 targets = arrayOf(imReaderSurface).toMutableList()
                 cameraManager?.openCamera(cameraId!!, mStateCallback, null)
-                Log.i("Camera permission", "Granted")
             } else {
                 Log.d("Camera permission", "Missing")
             }
@@ -165,14 +136,12 @@ class MainActivity : ComponentActivity() {
 
     private fun getFrontFacingCameraId(cameraManager: CameraManager?): String? {
         try {
-            Log.i("MainActivity", "getFrontFacingCameraId")
             for (id in cameraManager!!.cameraIdList) {
                 val cameraCharacteristics =
                     cameraManager.getCameraCharacteristics(id)
                 val cameraOrientation =
                     cameraCharacteristics.get(CameraCharacteristics.LENS_FACING)
                 if (cameraOrientation != null && cameraOrientation == CameraMetadata.LENS_FACING_FRONT) {
-                    Log.i("MainActivity", "getFrontFacingCameraId + $id")
                     return id
                 }
             }
@@ -184,7 +153,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        runner?.cancel()
+        cameraDevice?.close()
     }
 
 }
