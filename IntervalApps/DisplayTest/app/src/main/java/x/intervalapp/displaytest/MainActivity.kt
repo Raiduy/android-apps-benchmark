@@ -1,48 +1,50 @@
 package x.intervalapp.displaytest
 
-import android.media.MediaPlayer.OnPreparedListener
 import android.net.Uri
 import android.os.Bundle
-import android.widget.MediaController
+import android.os.Handler
 import android.widget.VideoView
 import androidx.activity.ComponentActivity
 
 
 class MainActivity : ComponentActivity() {
+    private lateinit var videoView : VideoView
+    private lateinit var videoUri: Uri
+
+    private val handler = Handler(applicationContext.mainLooper)
+    private val playRunnable = Runnable { playVideo() }
+    private val stopRunnable = Runnable { stopVideo() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         // Set up videoview
-        val videoView = findViewById<VideoView>(R.id.videoView)
-        val mc = MediaController(this)
-        mc.setAnchorView(videoView)
-        mc.setMediaPlayer(videoView)
-        videoView.setMediaController(mc)
+        videoView = findViewById(R.id.videoView)
+        videoUri = Uri.parse("android.resource://" + packageName + "/" + R.raw.videofile)
+        videoView.setOnPreparedListener { mp -> mp.setVolume(0f, 0f) }
 
-        // Set the path to the video
-        val videoUri: Uri = Uri.parse("android.resource://" + packageName + "/"
-                + R.raw.videofile)
-
-        videoView.setVideoURI(videoUri)
-        videoView.setOnPreparedListener(preparedListener)
-
-        videoView.requestFocus()
+        playVideo()
     }
 
-    // Listen for when the video is prepared
-    var preparedListener = OnPreparedListener { m ->
-        try {
-            if (m.isPlaying) {
-                m.stop()
-                m.release()
-            }
-            m.setVolume(0f, 0f)
-            m.isLooping = false
-            m.start()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+    private fun playVideo() {
+        videoView.setVideoURI(videoUri)
+        videoView.start()
+        handler.postDelayed(stopRunnable, RUN_INTERVAL)  // Stop video after RUN_INTERVAL
+    }
+
+    private fun stopVideo() {
+        videoView.stopPlayback()
+        handler.postDelayed(playRunnable, IDLE_INTERVAL) // Play video after IDLE_INTERVAL
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        handler.removeCallbacksAndMessages(null)
+    }
+
+    companion object {
+        private const val RUN_INTERVAL : Long = 5000
+        private const val IDLE_INTERVAL : Long = 5000
     }
 }
