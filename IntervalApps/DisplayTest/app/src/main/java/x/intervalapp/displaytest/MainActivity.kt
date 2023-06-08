@@ -1,46 +1,50 @@
 package x.intervalapp.displaytest
 
+import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.widget.VideoView
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import x.intervalapp.displaytest.ui.theme.DisplayTestTheme
+
 
 class MainActivity : ComponentActivity() {
+    private lateinit var videoView : VideoView
+    private lateinit var videoUri: Uri
+
+    private val handler = Handler(applicationContext.mainLooper)
+    private val playRunnable = Runnable { playVideo() }
+    private val stopRunnable = Runnable { stopVideo() }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            DisplayTestTheme {
-                // A surface container using the 'background' color from the theme
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    Greeting("Android")
-                }
-            }
-        }
+        setContentView(R.layout.activity_main)
+
+        // Set up videoview
+        videoView = findViewById(R.id.videoView)
+        videoUri = Uri.parse("android.resource://" + packageName + "/" + R.raw.videofile)
+        videoView.setOnPreparedListener { mp -> mp.setVolume(0f, 0f) }
+
+        playVideo()
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
+    private fun playVideo() {
+        videoView.setVideoURI(videoUri)
+        videoView.start()
+        handler.postDelayed(stopRunnable, RUN_INTERVAL)  // Stop video after RUN_INTERVAL
+    }
 
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    DisplayTestTheme {
-        Greeting("Android")
+    private fun stopVideo() {
+        videoView.stopPlayback()
+        handler.postDelayed(playRunnable, IDLE_INTERVAL) // Play video after IDLE_INTERVAL
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        handler.removeCallbacksAndMessages(null)
+    }
+
+    companion object {
+        private const val RUN_INTERVAL : Long = 5000
+        private const val IDLE_INTERVAL : Long = 5000
     }
 }
