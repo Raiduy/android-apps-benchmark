@@ -3,6 +3,7 @@ package x.intervalapp.displaytest
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
+import android.os.Looper
 import android.widget.VideoView
 import androidx.activity.ComponentActivity
 
@@ -11,7 +12,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var videoView : VideoView
     private lateinit var videoUri: Uri
 
-    private val handler = Handler(applicationContext.mainLooper)
+    private val handler = Handler(Looper.getMainLooper())
     private val playRunnable = Runnable { playVideo() }
     private val stopRunnable = Runnable { stopVideo() }
 
